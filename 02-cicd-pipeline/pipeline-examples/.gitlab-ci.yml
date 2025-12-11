@@ -1,0 +1,215 @@
+# ============================================
+# Pipeline GitLab CI - Telco Provisioning
+# Formation Automatisation Telco
+# ============================================
+
+stages:
+  - lint
+  - test
+  - build
+  - deploy-dev
+  - deploy-staging
+  - load-test
+  - deploy-prod
+
+variables:
+  APP_NAME: telco-provisioning
+  DOCKER_REGISTRY: registry.telco.local
+  DOCKER_IMAGE: ${DOCKER_REGISTRY}/${APP_NAME}
+
+# === Templates réutilisables ===
+.deploy_template: &deploy_template
+  script:
+    - echo "🚀 Déploiement vers $ENV..."
+    - echo "   Image: ${DOCKER_IMAGE}:${CI_COMMIT_SHORT_SHA}"
+    - |
+      # Simulation déploiement
+      echo "   Pulling image..."
+      echo "   Stopping old container..."
+      echo "   Starting new container..."
+      echo "   Health check..."
+    - echo "✅ Déploiement $ENV terminé"
+
+# ====== STAGE: LINT ======
+lint:
+  stage: lint
+  image: python:3.11-slim
+  script:
+    - pip install flake8 black ansible-lint
+    - echo "🔍 Lint Python..."
+    - flake8 app/ --max-line-length=120 || true
+    - echo "🔍 Lint Ansible playbooks..."
+    - ansible-lint playbooks/*.yml || true
+    - echo "✅ Lint terminé"
+  allow_failure: true
+
+# ====== STAGE: TEST ======
+unit_tests:
+  stage: test
+  image: python:3.11-slim
+  services:
+    - postgres:15-alpine
+  variables:
+    POSTGRES_DB: test_db
+    POSTGRES_USER: test
+    POSTGRES_PASSWORD: test
+  script:
+    - pip install pytest pytest-cov flask flask-cors requests
+    - echo "🧪 Tests unitaires..."
+    - cd app && python -m pytest tests/ -v --cov=.
+    - echo "✅ Tests unitaires: ${CI_JOB_STATUS}"
+  coverage: '/TOTAL.+ ([0-9]{1,3}%)/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+
+integration_tests:
+  stage: test
+  image: python:3.11-slim
+  script:
+    - pip install requests
+    - echo "🔗 Tests d'intégration..."
+    - python tests/integration/test_api.py
+    - echo "✅ Tests d'intégration passés"
+  needs:
+    - unit_tests
+
+# ====== STAGE: BUILD ======
+build:
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  script:
+    - echo "🏗️ Build de l'image Docker..."
+    - docker build -t ${DOCKER_IMAGE}:${CI_COMMIT_SHORT_SHA} -f app/Dockerfile app/
+    - docker tag ${DOCKER_IMAGE}:${CI_COMMIT_SHORT_SHA} ${DOCKER_IMAGE}:${CI_COMMIT_REF_SLUG}
+    - echo "📦 Push vers le registry..."
+    - docker push ${DOCKER_IMAGE}:${CI_COMMIT_SHORT_SHA}
+    - docker push ${DOCKER_IMAGE}:${CI_COMMIT_REF_SLUG}
+    - echo "✅ Build terminé"
+  needs:
+    - unit_tests
+    - integration_tests
+
+# ====== STAGE: DEPLOY DEV ======
+deploy_dev:
+  stage: deploy-dev
+  environment:
+    name: development
+    url: https://dev.telco-app.local
+  variables:
+    ENV: development
+  <<: *deploy_template
+  only:
+    - develop
+    - feature/*
+  needs:
+    - build
+
+# ====== STAGE: DEPLOY STAGING ======
+deploy_staging:
+  stage: deploy-staging
+  environment:
+    name: staging
+    url: https://staging.telco-app.local
+  variables:
+    ENV: staging
+  <<: *deploy_template
+  only:
+    - main
+  needs:
+    - build
+
+# ====== STAGE: LOAD TEST ======
+load_test:
+  stage: load-test
+  image: grafana/k6:latest
+  script:
+    - echo "📊 Tests de charge K6..."
+    - |
+      cat << 'EOF' > loadtest.js
+      import http from 'k6/http';
+      import { check, sleep } from 'k6';
+
+      export let options = {
+        vus: 50,
+        duration: '30s',
+        thresholds: {
+          http_req_duration: ['p(95)<500'],
+          http_req_failed: ['rate<0.01'],
+        },
+      };
+
+      export default function() {
+        let res = http.get('https://staging.telco-app.local/health');
+        check(res, {
+          'status is 200': (r) => r.status === 200,
+          'latency < 500ms': (r) => r.timings.duration < 500,
+        });
+        sleep(1);
+      }
+      EOF
+    - k6 run loadtest.js --summary-export=results.json || true
+    - echo "✅ Tests de charge terminés"
+  artifacts:
+    paths:
+      - results.json
+  only:
+    - main
+  needs:
+    - deploy_staging
+
+# ====== STAGE: DEPLOY PROD ======
+deploy_prod_canary:
+  stage: deploy-prod
+  environment:
+    name: production-canary
+    url: https://telco-app.local
+  variables:
+    ENV: production
+    CANARY_WEIGHT: "5"
+  script:
+    - echo "🐤 Déploiement Canary (5%)..."
+    - echo "   Création du canary deployment..."
+    - echo "   Configuration Istio traffic split: 95/5"
+    - echo "✅ Canary déployé"
+  when: manual
+  only:
+    - main
+  needs:
+    - load_test
+
+deploy_prod_full:
+  stage: deploy-prod
+  environment:
+    name: production
+    url: https://telco-app.local
+  variables:
+    ENV: production
+  script:
+    - echo "🎉 Promotion production 100%..."
+    - echo "   Suppression du canary..."
+    - echo "   Traffic split: 100% nouvelle version"
+    - echo "✅ Production déployée!"
+  when: manual
+  only:
+    - main
+  needs:
+    - deploy_prod_canary
+
+# ====== ROLLBACK ======
+rollback_prod:
+  stage: deploy-prod
+  environment:
+    name: production
+  script:
+    - echo "⏪ ROLLBACK Production..."
+    - echo "   Version actuelle: ${CI_COMMIT_SHORT_SHA}"
+    - echo "   Rollback vers: ${ROLLBACK_VERSION}"
+    - echo "✅ Rollback effectué"
+  when: manual
+  only:
+    - main

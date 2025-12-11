@@ -1,0 +1,157 @@
+# ==============================================
+# Playbook: Configuration complète Telco
+# Déploie VLAN + QoS + Routing + ACL
+# Formation Telco - Automatisation
+# ==============================================
+---
+- name: "🚀 Déploiement complet configuration Telco"
+  hosts: routers
+  gather_facts: true
+
+  vars:
+    deployment_id: "{{ lookup('pipe', 'date +%Y%m%d-%H%M%S') }}"
+
+  tasks:
+    - name: "📋 Début du déploiement"
+      debug:
+        msg: |
+          ============================================
+          🚀 DÉPLOIEMENT CONFIGURATION TELCO
+          ============================================
+          📅 Deployment ID: {{ deployment_id }}
+          🖥️  Routeur: {{ inventory_hostname }}
+          📍 Location: {{ location }}
+          🔧 Role: {{ router_role }}
+          ============================================
+
+    # === BACKUP ===
+    - name: "💾 Backup de la configuration actuelle"
+      shell: |
+        mkdir -p /etc/router/backups
+        tar -czf /etc/router/backups/config-{{ deployment_id }}.tar.gz \
+          /etc/router/vlans \
+          /etc/router/qos \
+          /etc/router/acl \
+          /etc/router/routing 2>/dev/null || true
+      register: backup_result
+
+    - name: "✅ Backup créé"
+      debug:
+        msg: "Backup: /etc/router/backups/config-{{ deployment_id }}.tar.gz"
+
+    # === VLANS ===
+    - name: "🏷️ Configuration des VLANs"
+      include_tasks: tasks/configure-vlans.yml
+
+    # === QoS ===
+    - name: "📊 Configuration QoS"
+      include_tasks: tasks/configure-qos.yml
+
+    # === ACL ===
+    - name: "🔒 Configuration ACL sécurité"
+      copy:
+        dest: /etc/router/acl/config.conf
+        content: |
+          # ==========================================
+          # ACL Sécurité - {{ inventory_hostname }}
+          # Généré le {{ ansible_date_time.iso8601 }}
+          # ==========================================
+
+          # ACL pour SIP Signaling (port 5060)
+          ip access-list extended ACL-SIP-SIGNALING
+            permit udp any any eq 5060
+            permit tcp any any eq 5060
+            permit tcp any any eq 5061
+            deny ip any any log
+
+          # ACL pour RTP Media (ports 10000-20000)
+          ip access-list extended ACL-RTP-MEDIA
+            permit udp any any range 10000 20000
+            deny ip any any log
+
+          # ACL Management
+          ip access-list extended ACL-MANAGEMENT
+            permit tcp 10.0.0.0 0.255.255.255 any eq 22
+            permit tcp 10.0.0.0 0.255.255.255 any eq 443
+            permit icmp any any
+            deny ip any any log
+
+          # Application sur interfaces
+          interface Vlan100
+            ip access-group ACL-SIP-SIGNALING in
+          !
+          interface Vlan101
+            ip access-group ACL-RTP-MEDIA in
+          !
+          interface Vlan200
+            ip access-group ACL-MANAGEMENT in
+          !
+        mode: '0644'
+
+    # === ROUTING ===
+    - name: "🛣️ Configuration Routing"
+      copy:
+        dest: /etc/router/routing/config.conf
+        content: |
+          # ==========================================
+          # Routing - {{ inventory_hostname }}
+          # Généré le {{ ansible_date_time.iso8601 }}
+          # ==========================================
+
+          # OSPF pour le backbone Telco
+          router ospf 1
+            router-id {{ ansible_host }}
+            network 172.28.0.0 0.0.255.255 area 0
+            passive-interface default
+            no passive-interface GigabitEthernet0/0
+          !
+
+          {% if router_role == 'core' %}
+          # BGP pour peering (Core uniquement)
+          router bgp 65001
+            neighbor 192.168.1.1 remote-as 65002
+            address-family ipv4
+              network 172.28.0.0 mask 255.255.0.0
+          !
+          {% endif %}
+
+          # Routes statiques
+          ip route 0.0.0.0 0.0.0.0 172.28.0.1
+        mode: '0644'
+
+    # === VALIDATION ===
+    - name: "✅ Validation de la configuration"
+      shell: |
+        echo "=== Validation {{ inventory_hostname }} ==="
+        echo "VLANs: $(grep -c 'vlan [0-9]' /etc/router/vlans/config.conf 2>/dev/null || echo 0)"
+        echo "ACLs: $(grep -c 'access-list' /etc/router/acl/config.conf 2>/dev/null || echo 0)"
+        echo "QoS Classes: $(grep -c 'class-map' /etc/router/qos/config.conf 2>/dev/null || echo 0)"
+      register: validation
+
+    - name: "📊 Résultat validation"
+      debug:
+        msg: "{{ validation.stdout_lines }}"
+
+# === RAPPORT FINAL ===
+- name: Rapport de déploiement
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: "📋 Rapport final"
+      debug:
+        msg: |
+          ╔════════════════════════════════════════════╗
+          ║  🎉 DÉPLOIEMENT TERMINÉ AVEC SUCCÈS        ║
+          ╠════════════════════════════════════════════╣
+          ║                                            ║
+          ║  📊 Résumé:                                ║
+          ║  - Routeurs configurés: 3                  ║
+          ║  - VLANs déployés: 9 (3x3)                 ║
+          ║  - Profils QoS: 3                          ║
+          ║  - ACLs sécurité: 3                        ║
+          ║  - Routing OSPF: Activé                    ║
+          ║                                            ║
+          ║  ⏱️  Temps total: ~30 secondes             ║
+          ║  (vs ~2 heures en manuel)                  ║
+          ║                                            ║
+          ╚════════════════════════════════════════════╝

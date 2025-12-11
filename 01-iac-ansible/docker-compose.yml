@@ -1,0 +1,88 @@
+version: '3.8'
+
+# ============================================
+# DEMO 1: Infrastructure as Code avec Ansible
+# ============================================
+# Cette démo simule un environnement Telco avec :
+# - Un contrôleur Ansible
+# - 3 "routeurs" simulés (conteneurs Alpine avec SSH)
+# - Un serveur web pour visualiser les résultats
+
+services:
+  # ---- Contrôleur Ansible ----
+  ansible-controller:
+    build:
+      context: .
+      dockerfile: Dockerfile.ansible
+    container_name: ansible-controller
+    hostname: ansible-controller
+    volumes:
+      - ./playbooks:/ansible/playbooks:ro
+      - ./inventory:/ansible/inventory:ro
+      - ./ansible.cfg:/etc/ansible/ansible.cfg:ro
+    networks:
+      - telco-network
+    depends_on:
+      - router-01
+      - router-02
+      - router-03
+    tty: true
+    stdin_open: true
+
+  # ---- Routeurs simulés (Alpine + SSH) ----
+  router-01:
+    build:
+      context: .
+      dockerfile: Dockerfile.router
+    container_name: router-01
+    hostname: router-01
+    networks:
+      telco-network:
+        ipv4_address: 172.28.0.10
+    environment:
+      - ROUTER_ID=01
+      - ROUTER_TYPE=core
+
+  router-02:
+    build:
+      context: .
+      dockerfile: Dockerfile.router
+    container_name: router-02
+    hostname: router-02
+    networks:
+      telco-network:
+        ipv4_address: 172.28.0.11
+    environment:
+      - ROUTER_ID=02
+      - ROUTER_TYPE=edge
+
+  router-03:
+    build:
+      context: .
+      dockerfile: Dockerfile.router
+    container_name: router-03
+    hostname: router-03
+    networks:
+      telco-network:
+        ipv4_address: 172.28.0.12
+    environment:
+      - ROUTER_ID=03
+      - ROUTER_TYPE=access
+
+  # ---- Interface Web pour voir les configs ----
+  web-viewer:
+    image: nginx:alpine
+    container_name: config-viewer
+    ports:
+      - "9081:80"
+    volumes:
+      - ./web:/usr/share/nginx/html:ro
+    networks:
+      - telco-network
+
+networks:
+  telco-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16

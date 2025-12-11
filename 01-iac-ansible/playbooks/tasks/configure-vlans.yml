@@ -1,0 +1,25 @@
+# Tâches de configuration VLAN (incluses depuis full-config)
+---
+- name: "🏷️ Création configuration VLAN"
+  copy:
+    dest: /etc/router/vlans/config.conf
+    content: |
+      # ==========================================
+      # Configuration VLAN - {{ inventory_hostname }}
+      # Généré le {{ ansible_date_time.iso8601 }}
+      # ==========================================
+
+      {% for vlan in vlans %}
+      vlan {{ vlan.id }}
+        name {{ vlan.name }}
+        description "{{ vlan.description }}"
+        state active
+      !
+      {% endfor %}
+
+      interface GigabitEthernet0/0
+        switchport mode trunk
+        switchport trunk allowed vlan {% for vlan in vlans %}{{ vlan.id }}{% if not loop.last %},{% endif %}{% endfor %}
+
+      !
+    mode: '0644'

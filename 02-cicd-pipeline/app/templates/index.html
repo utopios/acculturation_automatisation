@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ app_name }} - {{ env }}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            {% if env == 'production' %}
+            background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+            {% elif env == 'staging' %}
+            background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+            {% else %}
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            {% endif %}
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            text-align: center;
+            max-width: 500px;
+        }
+        h1 { color: #2c3e50; margin-bottom: 10px; }
+        .env-badge {
+            display: inline-block;
+            padding: 8px 20px;
+            border-radius: 20px;
+            color: white;
+            font-weight: bold;
+            margin: 15px 0;
+            {% if env == 'production' %}
+            background: #27ae60;
+            {% elif env == 'staging' %}
+            background: #f39c12;
+            {% else %}
+            background: #3498db;
+            {% endif %}
+        }
+        .version { color: #7f8c8d; margin-bottom: 20px; }
+        .endpoints {
+            text-align: left;
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        .endpoints h3 { margin-bottom: 15px; color: #2c3e50; }
+        .endpoint {
+            padding: 8px;
+            margin: 5px 0;
+            background: white;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .endpoint .method {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 3px;
+            color: white;
+            font-size: 12px;
+            margin-right: 10px;
+        }
+        .method.get { background: #2ecc71; }
+        .method.post { background: #3498db; }
+        .method.delete { background: #e74c3c; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Telco Provisioning API</h1>
+        <div class="env-badge">{{ env | upper }}</div>
+        <p class="version">Version: {{ version }}</p>
+
+        <div class="endpoints">
+            <h3>📡 API Endpoints</h3>
+            <div class="endpoint">
+                <span class="method get">GET</span> /health
+            </div>
+            <div class="endpoint">
+                <span class="method get">GET</span> /api/info
+            </div>
+            <div class="endpoint">
+                <span class="method get">GET</span> /api/services
+            </div>
+            <div class="endpoint">
+                <span class="method post">POST</span> /api/provision
+            </div>
+            <div class="endpoint">
+                <span class="method delete">DELETE</span> /api/services/{id}
+            </div>
+        </div>
+    </div>
+</body>
+</html>

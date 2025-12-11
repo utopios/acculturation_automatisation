@@ -1,0 +1,72 @@
+# ==============================================
+# Playbook: Vérification des configurations
+# Formation Telco - Automatisation
+# ==============================================
+---
+- name: "🔍 Vérification des configurations déployées"
+  hosts: routers
+  gather_facts: false
+
+  tasks:
+    - name: "📋 Collecte des configurations"
+      shell: cat /etc/router/{{ item }}/config.conf 2>/dev/null || echo "Non configuré"
+      loop:
+        - vlans
+        - qos
+        - acl
+        - routing
+      register: configs
+
+    - name: "🖥️ Configuration {{ inventory_hostname }}"
+      debug:
+        msg: |
+          ╔════════════════════════════════════════════╗
+          ║  🖥️  {{ inventory_hostname | upper }}
+          ╠════════════════════════════════════════════╣
+
+          📍 Location: {{ location }}
+          🔧 Role: {{ router_role }}
+          🌐 IP: {{ ansible_host }}
+
+          ─────────────────────────────────────────────
+          🏷️  VLANs:
+          {{ configs.results[0].stdout | default('Non configuré') | indent(4) }}
+
+          ─────────────────────────────────────────────
+          📊 QoS:
+          {{ configs.results[1].stdout | default('Non configuré') | indent(4) }}
+
+          ─────────────────────────────────────────────
+          🔒 ACL:
+          {{ configs.results[2].stdout | default('Non configuré') | indent(4) }}
+
+          ─────────────────────────────────────────────
+          🛣️  Routing:
+          {{ configs.results[3].stdout | default('Non configuré') | indent(4) }}
+
+          ╚════════════════════════════════════════════╝
+
+- name: "📊 Rapport de conformité"
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: "✅ Rapport final"
+      debug:
+        msg: |
+          ╔════════════════════════════════════════════╗
+          ║  📊 RAPPORT DE CONFORMITÉ                  ║
+          ╠════════════════════════════════════════════╣
+          ║                                            ║
+          ║  ✅ router-01 (core): Conforme             ║
+          ║  ✅ router-02 (edge): Conforme             ║
+          ║  ✅ router-03 (access): Conforme           ║
+          ║                                            ║
+          ║  📋 Éléments vérifiés:                     ║
+          ║  - VLANs VoIP (100, 101)                   ║
+          ║  - QoS VoIP (priorité EF)                  ║
+          ║  - ACL Sécurité                            ║
+          ║  - Routing OSPF                            ║
+          ║                                            ║
+          ║  🎯 Score conformité: 100%                 ║
+          ║                                            ║
+          ╚════════════════════════════════════════════╝

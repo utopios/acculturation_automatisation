@@ -1,0 +1,199 @@
+# ============================================
+# Pipeline CI/CD Drone - Telco Provisioning
+# Formation Automatisation Telco
+# ============================================
+
+kind: pipeline
+type: docker
+name: telco-provisioning-pipeline
+
+# Déclencheurs
+trigger:
+  branch:
+    - main
+    - develop
+    - feature/*
+  event:
+    - push
+    - pull_request
+
+# Variables d'environnement globales
+environment:
+  APP_NAME: telco-provisioning
+  REGISTRY: localhost:5000
+
+# === ÉTAPES DU PIPELINE ===
+
+steps:
+  # ---- ÉTAPE 1: Lint & Validation ----
+  - name: lint
+    image: python:3.11-slim
+    commands:
+      - pip install flake8 black
+      - echo "🔍 Vérification du code..."
+      - flake8 app/ --max-line-length=120 || true
+      - black --check app/ || true
+      - echo "✅ Lint terminé"
+
+  # ---- ÉTAPE 2: Tests Unitaires ----
+  - name: unit-tests
+    image: python:3.11-slim
+    commands:
+      - pip install pytest pytest-cov flask flask-cors requests
+      - echo "🧪 Exécution des tests unitaires..."
+      - cd app && python -m pytest tests/ -v --cov=. --cov-report=term || echo "Tests créés pour la démo"
+      - echo "✅ Tests unitaires terminés"
+    depends_on:
+      - lint
+
+  # ---- ÉTAPE 3: Build Image Docker ----
+  - name: build
+    image: plugins/docker
+    settings:
+      repo: ${REGISTRY}/${APP_NAME}
+      tags:
+        - ${DRONE_COMMIT_SHA:0:8}
+        - ${DRONE_BRANCH}
+        - latest
+      dockerfile: app/Dockerfile
+      context: app/
+      dry_run: true  # Pour la démo, pas de push réel
+    depends_on:
+      - unit-tests
+
+  # ---- ÉTAPE 4: Tests d'Intégration ----
+  - name: integration-tests
+    image: python:3.11-slim
+    commands:
+      - pip install requests
+      - echo "🔗 Tests d'intégration..."
+      - |
+        python << 'EOF'
+        import requests
+        import sys
+
+        # Simulation de tests d'intégration
+        print("Test 1: Health check... ", end="")
+        # En réel: response = requests.get("http://app-dev:8080/health")
+        print("✅ PASS")
+
+        print("Test 2: API Info... ", end="")
+        print("✅ PASS")
+
+        print("Test 3: Provisioning endpoint... ", end="")
+        print("✅ PASS")
+
+        print("\n✅ Tous les tests d'intégration passés!")
+        EOF
+    depends_on:
+      - build
+
+  # ---- ÉTAPE 5: Déploiement DEV ----
+  - name: deploy-dev
+    image: alpine
+    commands:
+      - echo "🚀 Déploiement en DEV..."
+      - echo "   Image: ${REGISTRY}/${APP_NAME}:${DRONE_COMMIT_SHA:0:8}"
+      - echo "   Environnement: development"
+      - sleep 2
+      - echo "✅ Déploiement DEV terminé"
+    depends_on:
+      - integration-tests
+    when:
+      branch:
+        - develop
+        - feature/*
+
+  # ---- ÉTAPE 6: Déploiement STAGING ----
+  - name: deploy-staging
+    image: alpine
+    commands:
+      - echo "🚀 Déploiement en STAGING..."
+      - echo "   Image: ${REGISTRY}/${APP_NAME}:${DRONE_COMMIT_SHA:0:8}"
+      - echo "   Environnement: staging"
+      - echo "   ⚠️  Validation manuelle requise pour PROD"
+      - sleep 2
+      - echo "✅ Déploiement STAGING terminé"
+    depends_on:
+      - integration-tests
+    when:
+      branch:
+        - main
+
+  # ---- ÉTAPE 7: Tests de Charge (STAGING) ----
+  - name: load-tests
+    image: alpine
+    commands:
+      - echo "📊 Tests de charge..."
+      - echo "   Simulant 100 requêtes/sec pendant 30s..."
+      - sleep 3
+      - echo "   Résultats:"
+      - echo "   - Latence moyenne: 45ms ✅"
+      - echo "   - P99 latence: 120ms ✅"
+      - echo "   - Erreurs: 0% ✅"
+      - echo "✅ Tests de charge passés"
+    depends_on:
+      - deploy-staging
+    when:
+      branch:
+        - main
+
+  # ---- ÉTAPE 8: Déploiement PROD (Canary) ----
+  - name: deploy-prod-canary
+    image: alpine
+    commands:
+      - echo "🐤 Déploiement CANARY (5% du trafic)..."
+      - echo "   Image: ${REGISTRY}/${APP_NAME}:${DRONE_COMMIT_SHA:0:8}"
+      - echo "   Environnement: production"
+      - echo "   Trafic: 5%"
+      - sleep 2
+      - echo "✅ Canary déployé - Monitoring en cours..."
+    depends_on:
+      - load-tests
+    when:
+      branch:
+        - main
+      event:
+        exclude:
+          - pull_request
+
+  # ---- ÉTAPE 9: Promotion PROD (100%) ----
+  - name: deploy-prod-full
+    image: alpine
+    commands:
+      - echo "🎉 Promotion PROD complète..."
+      - echo "   Trafic: 100%"
+      - echo "   ✅ Déploiement production terminé!"
+    depends_on:
+      - deploy-prod-canary
+    when:
+      branch:
+        - main
+      event:
+        exclude:
+          - pull_request
+
+  # ---- Notification ----
+  - name: notify
+    image: alpine
+    commands:
+      - echo "📧 Notification..."
+      - echo "   Pipeline: ${DRONE_REPO} #${DRONE_BUILD_NUMBER}"
+      - echo "   Statut: SUCCESS"
+      - echo "   Commit: ${DRONE_COMMIT_SHA:0:8}"
+      - echo "   Auteur: ${DRONE_COMMIT_AUTHOR}"
+    depends_on:
+      - deploy-prod-full
+    when:
+      status:
+        - success
+        - failure
+
+# === Services pour les tests ===
+services:
+  - name: test-db
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: telco_test
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test

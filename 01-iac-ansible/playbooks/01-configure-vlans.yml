@@ -1,0 +1,78 @@
+# ==============================================
+# Playbook: Configuration des VLANs VoIP
+# Formation Telco - Automatisation
+# ==============================================
+---
+- name: Configuration des VLANs sur les routeurs Telco
+  hosts: routers
+  gather_facts: true
+
+  vars:
+    config_timestamp: "{{ ansible_date_time.iso8601 }}"
+    config_author: "Ansible Automation"
+
+  tasks:
+    - name: "📋 Affichage des informations du routeur"
+      debug:
+        msg: |
+          🖥️  Routeur: {{ inventory_hostname }}
+          📍 Location: {{ location }}
+          🔧 Role: {{ router_role }}
+          🌐 IP: {{ ansible_host }}
+
+    - name: "🔧 Création du fichier de configuration VLAN"
+      copy:
+        dest: /etc/router/vlans/config.conf
+        content: |
+          # ==========================================
+          # Configuration VLAN - {{ inventory_hostname }}
+          # Généré par Ansible le {{ config_timestamp }}
+          # ==========================================
+
+          {% for vlan in vlans %}
+          # VLAN {{ vlan.id }} - {{ vlan.description }}
+          vlan {{ vlan.id }}
+            name {{ vlan.name }}
+            description "{{ vlan.description }}"
+            state active
+          !
+          {% endfor %}
+
+          # Configuration des interfaces trunk
+          interface GigabitEthernet0/0
+            switchport mode trunk
+            switchport trunk allowed vlan {% for vlan in vlans %}{{ vlan.id }}{% if not loop.last %},{% endif %}{% endfor %}
+
+            description "Trunk vers {{ 'Core' if router_role == 'access' else 'Distribution' }}"
+          !
+
+          # === Fin de configuration ===
+        mode: '0644'
+      register: vlan_config
+
+    - name: "✅ Affichage du statut"
+      debug:
+        msg: "{{ '✅ VLANs configurés' if vlan_config.changed else '⏭️  VLANs déjà à jour' }}"
+
+    - name: "📊 Récapitulatif des VLANs configurés"
+      debug:
+        msg: "VLAN {{ item.id }} ({{ item.name }}): {{ item.description }}"
+      loop: "{{ vlans }}"
+
+- name: Rapport de configuration
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: "📝 Génération du rapport"
+      debug:
+        msg: |
+          ============================================
+          📋 RAPPORT DE CONFIGURATION VLAN
+          ============================================
+          Date: {{ lookup('pipe', 'date') }}
+          Routeurs configurés: {{ groups['routers'] | length }}
+
+          ✅ Configuration terminée avec succès !
+
+          Pour vérifier: ansible-playbook 04-verify-config.yml
+          ============================================

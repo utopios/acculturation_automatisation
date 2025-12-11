@@ -1,0 +1,38 @@
+# Dockerfile pour simuler un routeur/équipement réseau
+FROM alpine:3.18
+
+LABEL maintainer="Formation Telco Automatisation"
+LABEL description="Routeur simulé pour démo Ansible"
+
+# Installation SSH et outils de base
+RUN apk add --no-cache \
+    openssh \
+    bash \
+    curl \
+    jq \
+    iproute2 \
+    iptables \
+    net-tools \
+    tcpdump
+
+# Configuration SSH
+RUN ssh-keygen -A && \
+    echo "root:telco2024" | chpasswd && \
+    sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config && \
+    sed -i 's/#PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+
+# Création des répertoires de config "réseau"
+RUN mkdir -p /etc/router/{interfaces,vlans,acl,qos,routing}
+
+# Script de simulation de config réseau
+COPY scripts/router-config.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/router-config.sh
+
+# Script d'entrée
+COPY entrypoint-router.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+EXPOSE 22
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["/usr/sbin/sshd", "-D"]

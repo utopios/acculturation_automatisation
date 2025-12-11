@@ -1,0 +1,42 @@
+# Dockerfile pour le contrôleur Ansible
+FROM python:3.11-slim
+
+LABEL maintainer="Formation Telco Automatisation"
+LABEL description="Contrôleur Ansible pour démo IaC Telco"
+
+# Installation des dépendances
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openssh-client \
+    sshpass \
+    git \
+    vim \
+    curl \
+    jq \
+    && rm -rf /var/lib/apt/lists/*
+
+# Installation d'Ansible et modules réseau
+RUN pip install --no-cache-dir \
+    ansible \
+    ansible-lint \
+    jmespath \
+    netaddr \
+    paramiko
+
+# Création de la structure de répertoires
+RUN mkdir -p /ansible/{playbooks,inventory,roles,logs}
+
+WORKDIR /ansible
+
+# Configuration SSH pour éviter les prompts
+RUN mkdir -p /root/.ssh && \
+    echo "Host *" > /root/.ssh/config && \
+    echo "  StrictHostKeyChecking no" >> /root/.ssh/config && \
+    echo "  UserKnownHostsFile=/dev/null" >> /root/.ssh/config && \
+    chmod 600 /root/.ssh/config
+
+# Script d'entrée
+COPY entrypoint-ansible.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["bash"]

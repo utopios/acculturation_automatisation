@@ -1,0 +1,160 @@
+# ==============================================
+# Playbook: Configuration QoS pour VoIP Telco
+# Formation Telco - Automatisation
+# ==============================================
+---
+- name: Configuration QoS pour trafic VoIP
+  hosts: routers
+  gather_facts: true
+
+  vars:
+    # Profils QoS par type de routeur
+    qos_profiles:
+      voip_core:
+        description: "QoS Core - Priorité maximale voix"
+        classes:
+          - name: VOICE
+            dscp: EF
+            bandwidth_percent: 30
+            priority: strict
+          - name: SIGNALING
+            dscp: AF31
+            bandwidth_percent: 10
+            priority: high
+          - name: VIDEO
+            dscp: AF41
+            bandwidth_percent: 20
+            priority: medium
+          - name: DATA
+            dscp: BE
+            bandwidth_percent: 40
+            priority: low
+
+      voip_edge:
+        description: "QoS Edge - Protection voix + peering"
+        classes:
+          - name: VOICE
+            dscp: EF
+            bandwidth_percent: 25
+            priority: strict
+          - name: SIGNALING
+            dscp: AF31
+            bandwidth_percent: 10
+            priority: high
+          - name: BEST_EFFORT
+            dscp: BE
+            bandwidth_percent: 65
+            priority: low
+
+      voip_access:
+        description: "QoS Access - Qualité client"
+        classes:
+          - name: VOICE
+            dscp: EF
+            bandwidth_percent: 20
+            priority: strict
+          - name: SIGNALING
+            dscp: AF31
+            bandwidth_percent: 5
+            priority: high
+          - name: CLIENT_DATA
+            dscp: AF21
+            bandwidth_percent: 75
+            priority: medium
+
+  tasks:
+    - name: "🎯 Sélection du profil QoS"
+      set_fact:
+        current_qos: "{{ qos_profiles[qos_profile] }}"
+
+    - name: "📋 Affichage du profil QoS sélectionné"
+      debug:
+        msg: |
+          🖥️  Routeur: {{ inventory_hostname }}
+          📊 Profil QoS: {{ qos_profile }}
+          📝 Description: {{ current_qos.description }}
+
+    - name: "🔧 Création de la configuration QoS"
+      copy:
+        dest: /etc/router/qos/config.conf
+        content: |
+          # ==========================================
+          # Configuration QoS - {{ inventory_hostname }}
+          # Profil: {{ qos_profile }}
+          # {{ current_qos.description }}
+          # Généré par Ansible le {{ ansible_date_time.iso8601 }}
+          # ==========================================
+
+          # === Définition des class-maps ===
+          {% for class in current_qos.classes %}
+          class-map match-any {{ class.name }}
+            match dscp {{ class.dscp }}
+            description "{{ class.name }} traffic - Priority: {{ class.priority }}"
+          !
+          {% endfor %}
+
+          # === Policy-map principale ===
+          policy-map TELCO-QOS-POLICY
+            description "{{ current_qos.description }}"
+          {% for class in current_qos.classes %}
+            class {{ class.name }}
+              bandwidth percent {{ class.bandwidth_percent }}
+          {% if class.priority == 'strict' %}
+              priority
+          {% endif %}
+              queue-limit 64 packets
+          !
+          {% endfor %}
+
+          # === Application sur les interfaces ===
+          interface GigabitEthernet0/0
+            service-policy output TELCO-QOS-POLICY
+          !
+
+          interface GigabitEthernet0/1
+            service-policy output TELCO-QOS-POLICY
+          !
+
+          # === Métriques QoS (pour monitoring) ===
+          # Latence cible voix: < 50ms
+          # Jitter cible: < 30ms
+          # Perte paquets: < 1%
+
+          # === Fin de configuration QoS ===
+        mode: '0644'
+      register: qos_config
+
+    - name: "✅ Résultat de la configuration"
+      debug:
+        msg: |
+          {{ '✅ QoS configurée avec succès' if qos_config.changed else '⏭️  QoS déjà à jour' }}
+
+          Classes configurées:
+          {% for class in current_qos.classes %}
+          - {{ class.name }}: {{ class.bandwidth_percent }}% ({{ class.priority }})
+          {% endfor %}
+
+- name: Validation globale QoS
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: "📊 Rapport QoS"
+      debug:
+        msg: |
+          ============================================
+          📊 RAPPORT CONFIGURATION QoS
+          ============================================
+
+          ✅ Tous les routeurs configurés avec QoS VoIP
+
+          Profils appliqués:
+          - Core: Priorité stricte voix (30%)
+          - Edge: Protection voix + peering
+          - Access: Qualité client garantie
+
+          🎯 Objectifs SLA:
+          - Latence voix: < 50ms
+          - Jitter: < 30ms
+          - Packet loss: < 1%
+
+          ============================================

@@ -1,0 +1,148 @@
+version: '3.8'
+
+# ============================================
+# DEMO 2: Pipeline CI/CD avec GitLab
+# ============================================
+# Simule un pipeline de déploiement Telco avec :
+# - Gitea (alternative légère à GitLab)
+# - Drone CI (pipeline CI/CD)
+# - Registry Docker local
+# - Environnements de test
+
+services:
+  # ---- Gitea (Git Server) ----
+  gitea:
+    image: gitea/gitea:1.21-rootless
+    container_name: gitea
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      - GITEA__database__DB_TYPE=sqlite3
+      - GITEA__server__ROOT_URL=http://localhost:3000
+      - GITEA__server__HTTP_PORT=3000
+    volumes:
+      - gitea-data:/var/lib/gitea
+      - gitea-config:/etc/gitea
+    ports:
+      - "4000:3000"
+      - "2222:22"
+    networks:
+      - cicd-network
+
+  # ---- Drone CI Server ----
+  drone-server:
+    image: drone/drone:2
+    container_name: drone-server
+    environment:
+      - DRONE_GITEA_SERVER=http://gitea:3000
+      - DRONE_GITEA_CLIENT_ID=${DRONE_GITEA_CLIENT_ID:-drone}
+      - DRONE_GITEA_CLIENT_SECRET=${DRONE_GITEA_CLIENT_SECRET:-drone-secret}
+      - DRONE_RPC_SECRET=super-secret-rpc-key
+      - DRONE_SERVER_HOST=localhost:8080
+      - DRONE_SERVER_PROTO=http
+      - DRONE_USER_CREATE=username:admin,admin:true
+    volumes:
+      - drone-data:/data
+    ports:
+      - "9080:80"
+    networks:
+      - cicd-network
+    depends_on:
+      - gitea
+
+  # ---- Drone Runner ----
+  drone-runner:
+    image: drone/drone-runner-docker:1
+    container_name: drone-runner
+    environment:
+      - DRONE_RPC_PROTO=http
+      - DRONE_RPC_HOST=drone-server
+      - DRONE_RPC_SECRET=super-secret-rpc-key
+      - DRONE_RUNNER_CAPACITY=2
+      - DRONE_RUNNER_NAME=local-runner
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - cicd-network
+    depends_on:
+      - drone-server
+
+  # ---- Registry Docker Local ----
+  registry:
+    image: registry:2
+    container_name: docker-registry
+    ports:
+      - "5005:5000"
+    volumes:
+      - registry-data:/var/lib/registry
+    networks:
+      - cicd-network
+
+  # ---- Environnement DEV ----
+  app-dev:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: telco-app-dev
+    environment:
+      - ENV=development
+      - APP_NAME=telco-provisioning
+    ports:
+      - "8091:8080"
+    networks:
+      - cicd-network
+    labels:
+      - "environment=dev"
+
+  # ---- Environnement STAGING ----
+  app-staging:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: telco-app-staging
+    environment:
+      - ENV=staging
+      - APP_NAME=telco-provisioning
+    ports:
+      - "8092:8080"
+    networks:
+      - cicd-network
+    labels:
+      - "environment=staging"
+
+  # ---- Environnement PROD (simulé) ----
+  app-prod:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: telco-app-prod
+    environment:
+      - ENV=production
+      - APP_NAME=telco-provisioning
+    ports:
+      - "8093:8080"
+    networks:
+      - cicd-network
+    labels:
+      - "environment=production"
+
+  # ---- Interface de monitoring pipeline ----
+  pipeline-dashboard:
+    image: nginx:alpine
+    container_name: pipeline-dashboard
+    ports:
+      - "9082:80"
+    volumes:
+      - ./dashboard:/usr/share/nginx/html:ro
+    networks:
+      - cicd-network
+
+networks:
+  cicd-network:
+    driver: bridge
+
+volumes:
+  gitea-data:
+  gitea-config:
+  drone-data:
+  registry-data:

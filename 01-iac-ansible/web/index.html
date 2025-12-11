@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demo Ansible - Formation Telco</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #ecf0f1;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #00d4ff;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+        }
+        .card {
+            background: #1e3a5f;
+            border-radius: 10px;
+            padding: 20px;
+            border-left: 4px solid #00d4ff;
+        }
+        .card h2 {
+            color: #00d4ff;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .card h2 .icon { font-size: 1.5em; }
+        .card pre {
+            background: #0d1b2a;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        .status {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+        .status.ok { background: #27ae60; }
+        .status.pending { background: #f39c12; }
+        .commands {
+            background: #2c3e50;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 30px;
+        }
+        .commands h2 { color: #e74c3c; margin-bottom: 15px; }
+        .cmd {
+            background: #1a1a2e;
+            padding: 10px 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-family: monospace;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .cmd code { color: #2ecc71; }
+        .cmd .desc { color: #7f8c8d; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎮 Demo Ansible - Infrastructure as Code</h1>
+        <p style="text-align: center; margin-bottom: 30px; color: #7f8c8d;">
+            Formation Automatisation Telco - Configuration réseau automatisée
+        </p>
+
+        <div class="grid">
+            <div class="card">
+                <h2><span class="icon">🖥️</span> Router-01 (Core)</h2>
+                <pre>
+Hostname: router-01
+Role: Core Router
+Location: datacenter-paris
+IP: 172.28.0.10
+
+VLANs configurés:
+- VLAN 100: SIP_SIGNALING
+- VLAN 101: RTP_MEDIA
+- VLAN 200: MANAGEMENT
+
+QoS: voip_core (priorité stricte)
+                </pre>
+                <span class="status ok">✅ Opérationnel</span>
+            </div>
+
+            <div class="card">
+                <h2><span class="icon">🖥️</span> Router-02 (Edge)</h2>
+                <pre>
+Hostname: router-02
+Role: Edge Router
+Location: pop-lyon
+IP: 172.28.0.11
+
+VLANs configurés:
+- VLAN 100: SIP_SIGNALING
+- VLAN 101: RTP_MEDIA
+- VLAN 300: INTERNET
+
+QoS: voip_edge (protection voix)
+                </pre>
+                <span class="status ok">✅ Opérationnel</span>
+            </div>
+
+            <div class="card">
+                <h2><span class="icon">🖥️</span> Router-03 (Access)</h2>
+                <pre>
+Hostname: router-03
+Role: Access Router
+Location: site-marseille
+IP: 172.28.0.12
+
+VLANs configurés:
+- VLAN 100: SIP_SIGNALING
+- VLAN 101: RTP_MEDIA
+- VLAN 400: CLIENT_DATA
+
+QoS: voip_access (qualité client)
+                </pre>
+                <span class="status ok">✅ Opérationnel</span>
+            </div>
+        </div>
+
+        <div class="commands">
+            <h2>📋 Commandes de la Démo</h2>
+
+            <div class="cmd">
+                <code>docker-compose up -d</code>
+                <span class="desc">Démarrer l'environnement</span>
+            </div>
+
+            <div class="cmd">
+                <code>docker exec -it ansible-controller bash</code>
+                <span class="desc">Accéder au contrôleur Ansible</span>
+            </div>
+
+            <div class="cmd">
+                <code>ansible all -m ping</code>
+                <span class="desc">Tester la connectivité</span>
+            </div>
+
+            <div class="cmd">
+                <code>ansible-playbook /ansible/playbooks/01-configure-vlans.yml</code>
+                <span class="desc">Configurer les VLANs VoIP</span>
+            </div>
+
+            <div class="cmd">
+                <code>ansible-playbook /ansible/playbooks/02-configure-qos.yml</code>
+                <span class="desc">Appliquer la QoS Telco</span>
+            </div>
+
+            <div class="cmd">
+                <code>ansible-playbook /ansible/playbooks/03-full-config.yml</code>
+                <span class="desc">Déploiement complet</span>
+            </div>
+
+            <div class="cmd">
+                <code>ansible-playbook /ansible/playbooks/04-verify-config.yml</code>
+                <span class="desc">Vérifier les configurations</span>
+            </div>
+        </div>
+
+        <p style="text-align: center; margin-top: 30px; color: #7f8c8d;">
+            Interface disponible sur <strong>http://localhost:8081</strong>
+        </p>
+    </div>
+</body>
+</html>

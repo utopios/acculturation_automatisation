@@ -1,0 +1,40 @@
+# Tâches de configuration QoS (incluses depuis full-config)
+---
+- name: "📊 Création configuration QoS"
+  copy:
+    dest: /etc/router/qos/config.conf
+    content: |
+      # ==========================================
+      # Configuration QoS - {{ inventory_hostname }}
+      # Profil: {{ qos_profile }}
+      # Généré le {{ ansible_date_time.iso8601 }}
+      # ==========================================
+
+      # Class-map pour trafic voix (priorité maximale)
+      class-map match-any VOICE
+        match dscp EF
+        description "Trafic voix temps réel"
+      !
+
+      # Class-map pour signalisation SIP
+      class-map match-any SIGNALING
+        match dscp AF31
+        description "Signalisation VoIP"
+      !
+
+      # Policy-map
+      policy-map TELCO-QOS-{{ router_role | upper }}
+        class VOICE
+          bandwidth percent 30
+          priority
+        class SIGNALING
+          bandwidth percent 10
+        class class-default
+          bandwidth percent 60
+      !
+
+      # Application
+      interface GigabitEthernet0/0
+        service-policy output TELCO-QOS-{{ router_role | upper }}
+      !
+    mode: '0644'
