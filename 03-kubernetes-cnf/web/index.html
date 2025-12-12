@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demo Kubernetes CNF - Formation Telco</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%);
+            color: #ecf0f1;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            color: #326ce5;
+            font-size: 2em;
+        }
+        .subtitle {
+            text-align: center;
+            color: #7f8c8d;
+            margin-bottom: 30px;
+        }
+
+        /* Kubernetes cluster visualization */
+        .cluster {
+            background: rgba(50, 108, 229, 0.1);
+            border: 2px solid #326ce5;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        .cluster-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .cluster-header h2 { color: #326ce5; }
+        .k8s-logo {
+            width: 40px;
+            height: 40px;
+            background: #326ce5;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5em;
+        }
+
+        /* Namespaces */
+        .namespaces {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+        }
+        .namespace {
+            background: rgba(30, 58, 95, 0.8);
+            border-radius: 10px;
+            padding: 15px;
+            border-left: 4px solid #9b59b6;
+        }
+        .namespace.cnf { border-left-color: #27ae60; }
+        .namespace.core { border-left-color: #e74c3c; }
+        .namespace.monitoring { border-left-color: #f39c12; }
+        .namespace h3 {
+            color: #00d4ff;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Pods */
+        .pods {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .pod {
+            background: #1a1a2e;
+            border-radius: 8px;
+            padding: 10px 15px;
+            font-size: 0.85em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .pod .status {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #27ae60;
+        }
+        .pod .status.pending { background: #f39c12; }
+        .pod .replicas {
+            background: #326ce5;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 0.75em;
+        }
+
+        /* CNF Architecture */
+        .architecture {
+            background: rgba(30, 58, 95, 0.5);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+        }
+        .architecture h2 {
+            color: #00d4ff;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .arch-flow {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .arch-component {
+            background: linear-gradient(135deg, #27ae60, #2ecc71);
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            min-width: 150px;
+        }
+        .arch-component.sbc { background: linear-gradient(135deg, #e74c3c, #c0392b); }
+        .arch-component.sip { background: linear-gradient(135deg, #3498db, #2980b9); }
+        .arch-component.media { background: linear-gradient(135deg, #9b59b6, #8e44ad); }
+        .arch-component .icon { font-size: 2em; margin-bottom: 8px; }
+        .arch-component .name { font-weight: bold; }
+        .arch-arrow {
+            font-size: 2em;
+            color: #00d4ff;
+        }
+
+        /* Commands */
+        .commands {
+            background: rgba(44, 62, 80, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 30px;
+        }
+        .commands h2 { color: #e74c3c; margin-bottom: 15px; }
+        .cmd {
+            background: #1a1a2e;
+            padding: 12px 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-family: monospace;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .cmd code { color: #2ecc71; font-size: 0.9em; }
+        .cmd .desc { color: #7f8c8d; font-size: 12px; }
+
+        /* Grid for info cards */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+        .info-card {
+            background: rgba(30, 58, 95, 0.6);
+            border-radius: 10px;
+            padding: 20px;
+        }
+        .info-card h3 {
+            color: #00d4ff;
+            margin-bottom: 15px;
+        }
+        .info-card pre {
+            background: #0d1b2a;
+            padding: 15px;
+            border-radius: 5px;
+            font-size: 11px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>☸️ Demo Kubernetes - CNF Telco</h1>
+        <p class="subtitle">Formation Automatisation Telco - Cloud Native Functions sur K3s</p>
+
+        <!-- CNF Architecture -->
+        <div class="architecture">
+            <h2>Architecture CNF VoIP</h2>
+            <div class="arch-flow">
+                <div class="arch-component sbc">
+                    <div class="icon">🛡️</div>
+                    <div class="name">SBC</div>
+                    <div style="font-size: 0.8em; margin-top: 5px;">Session Border</div>
+                </div>
+                <div class="arch-arrow">→</div>
+                <div class="arch-component sip">
+                    <div class="icon">📞</div>
+                    <div class="name">SIP Proxy</div>
+                    <div style="font-size: 0.8em; margin-top: 5px;">Signaling</div>
+                </div>
+                <div class="arch-arrow">→</div>
+                <div class="arch-component media">
+                    <div class="icon">🎵</div>
+                    <div class="name">Media GW</div>
+                    <div style="font-size: 0.8em; margin-top: 5px;">RTP/Media</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Kubernetes Cluster -->
+        <div class="cluster">
+            <div class="cluster-header">
+                <div class="k8s-logo">☸️</div>
+                <h2>Cluster K3s - Telco Demo</h2>
+            </div>
+
+            <div class="namespaces">
+                <!-- Namespace CNF -->
+                <div class="namespace cnf">
+                    <h3>📦 telco-cnf</h3>
+                    <div class="pods">
+                        <div class="pod">
+                            <div class="status"></div>
+                            <span>cnf-sip-proxy</span>
+                            <span class="replicas">2/2</span>
+                        </div>
+                        <div class="pod">
+                            <div class="status"></div>
+                            <span>cnf-media-gateway</span>
+                            <span class="replicas">2/2</span>
+                        </div>
+                        <div class="pod">
+                            <div class="status"></div>
+                            <span>cnf-sbc</span>
+                            <span class="replicas">2/2</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Namespace 5G Core -->
+                <div class="namespace core">
+                    <h3>📡 telco-5g-core</h3>
+                    <div class="pods">
+                        <div class="pod">
+                            <div class="status"></div>
+                            <span>open5gs-amf</span>
+                            <span class="replicas">2/2</span>
+                        </div>
+                        <div class="pod">
+                            <div class="status"></div>
+                            <span>open5gs-smf</span>
+                            <span class="replicas">2/2</span>
+                        </div>
+                        <div class="pod">
+                            <div class="status"></div>
+                            <span>open5gs-upf</span>
+                            <span class="replicas">2/2</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Info Cards -->
+        <div class="info-grid">
+            <div class="info-card">
+                <h3>🔄 HPA - Auto Scaling</h3>
+                <pre>
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: sip-proxy-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cnf-sip-proxy
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+                </pre>
+            </div>
+
+            <div class="info-card">
+                <h3>🔒 Network Policy</h3>
+                <pre>
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-sip-traffic
+spec:
+  podSelector:
+    matchLabels:
+      app: sip-proxy
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              cnf-type: security
+      ports:
+        - protocol: UDP
+          port: 5060
+                </pre>
+            </div>
+
+            <div class="info-card">
+                <h3>🛡️ Pod Disruption Budget</h3>
+                <pre>
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: media-gateway-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: media-gateway
+                </pre>
+            </div>
+        </div>
+
+        <!-- Commands -->
+        <div class="commands">
+            <h2>📋 Commandes de la Démo</h2>
+
+            <div class="cmd">
+                <code>docker-compose up -d</code>
+                <span class="desc">Démarrer le cluster K3s</span>
+            </div>
+
+            <div class="cmd">
+                <code>docker exec -it k8s-kubectl bash</code>
+                <span class="desc">Accéder au terminal kubectl</span>
+            </div>
+
+            <div class="cmd">
+                <code>kubectl get nodes</code>
+                <span class="desc">Voir les nodes du cluster</span>
+            </div>
+
+            <div class="cmd">
+                <code>kubectl get pods -n telco-cnf</code>
+                <span class="desc">Lister les pods CNF</span>
+            </div>
+
+            <div class="cmd">
+                <code>kubectl get pods -n telco-5g-core</code>
+                <span class="desc">Lister les pods 5G Core</span>
+            </div>
+
+            <div class="cmd">
+                <code>kubectl apply -f /manifests/</code>
+                <span class="desc">Déployer tous les manifests</span>
+            </div>
+
+            <div class="cmd">
+                <code>kubectl get hpa -n telco-cnf</code>
+                <span class="desc">Voir les HorizontalPodAutoscalers</span>
+            </div>
+
+            <div class="cmd">
+                <code>kubectl describe networkpolicy -n telco-cnf</code>
+                <span class="desc">Voir les Network Policies</span>
+            </div>
+
+            <div class="cmd">
+                <code>kubectl scale deployment cnf-sip-proxy -n telco-cnf --replicas=5</code>
+                <span class="desc">Scaler manuellement le SIP Proxy</span>
+            </div>
+
+            <div class="cmd">
+                <code>kubectl rollout status deployment/cnf-sbc -n telco-cnf</code>
+                <span class="desc">Suivre un rolling update</span>
+            </div>
+        </div>
+
+        <p style="text-align: center; margin-top: 30px; color: #7f8c8d;">
+            Dashboard disponible sur <strong>http://localhost:8083</strong> | K8s API sur <strong>https://localhost:6443</strong>
+        </p>
+    </div>
+</body>
+</html>

@@ -1,0 +1,70 @@
+# ============================================
+# 5G Core: AMF (Access and Mobility Management)
+# Cloud Native 5G Network Function
+# ============================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: open5gs-amf
+  namespace: telco-5g-core
+  labels:
+    app: amf
+    nf-type: 5g-core
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: amf
+  template:
+    metadata:
+      labels:
+        app: amf
+        nf-type: 5g-core
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9100"
+    spec:
+      containers:
+        - name: amf
+          image: nginx:alpine
+          ports:
+            - containerPort: 38412
+              name: ngap
+              protocol: SCTP
+            - containerPort: 80
+              name: sbi
+            - containerPort: 9100
+              name: metrics
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+            limits:
+              memory: "512Mi"
+              cpu: "400m"
+          env:
+            - name: NF_TYPE
+              value: "AMF"
+            - name: MCC
+              value: "208"
+            - name: MNC
+              value: "93"
+            - name: TAC
+              value: "1"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: amf-service
+  namespace: telco-5g-core
+spec:
+  type: ClusterIP
+  ports:
+    - port: 38412
+      name: ngap
+    - port: 80
+      name: sbi
+    - port: 9100
+      name: metrics
+  selector:
+    app: amf

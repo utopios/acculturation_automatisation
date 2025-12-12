@@ -1,0 +1,111 @@
+# ============================================
+# Network Policies pour isolation CNF
+# Sécurisation du trafic inter-pods
+# ============================================
+
+# Policy: Isolation par défaut pour telco-cnf
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: telco-cnf
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+
+---
+# Policy: Autoriser trafic SIP vers SIP Proxy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-sip-traffic
+  namespace: telco-cnf
+spec:
+  podSelector:
+    matchLabels:
+      app: sip-proxy
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              cnf-type: security
+      ports:
+        - protocol: UDP
+          port: 5060
+        - protocol: TCP
+          port: 5061
+
+---
+# Policy: Autoriser trafic SBC vers Media Gateway
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-media-traffic
+  namespace: telco-cnf
+spec:
+  podSelector:
+    matchLabels:
+      app: media-gateway
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              cnf-type: security
+      ports:
+        - protocol: UDP
+          port: 2000
+
+---
+# Policy: Autoriser monitoring depuis telco-monitoring
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-monitoring
+  namespace: telco-cnf
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/name: telco-monitoring
+      ports:
+        - protocol: TCP
+          port: 9090
+        - protocol: TCP
+          port: 9091
+        - protocol: TCP
+          port: 9092
+
+---
+# Policy: 5G Core - Autoriser communication inter-NF
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-5g-core-internal
+  namespace: telco-5g-core
+spec:
+  podSelector:
+    matchLabels:
+      nf-type: 5g-core
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              nf-type: 5g-core
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              nf-type: 5g-core

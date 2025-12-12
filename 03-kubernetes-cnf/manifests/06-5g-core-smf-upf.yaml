@@ -1,0 +1,121 @@
+# ============================================
+# 5G Core: SMF (Session Management Function)
+# ============================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: open5gs-smf
+  namespace: telco-5g-core
+  labels:
+    app: smf
+    nf-type: 5g-core
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: smf
+  template:
+    metadata:
+      labels:
+        app: smf
+        nf-type: 5g-core
+    spec:
+      containers:
+        - name: smf
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+              name: sbi
+            - containerPort: 8805
+              name: pfcp
+              protocol: UDP
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+          env:
+            - name: NF_TYPE
+              value: "SMF"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: smf-service
+  namespace: telco-5g-core
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      name: sbi
+    - port: 8805
+      name: pfcp
+      protocol: UDP
+  selector:
+    app: smf
+---
+# ============================================
+# 5G Core: UPF (User Plane Function)
+# ============================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: open5gs-upf
+  namespace: telco-5g-core
+  labels:
+    app: upf
+    nf-type: 5g-core
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: upf
+  template:
+    metadata:
+      labels:
+        app: upf
+        nf-type: 5g-core
+    spec:
+      containers:
+        - name: upf
+          image: nginx:alpine
+          ports:
+            - containerPort: 8805
+              name: pfcp
+              protocol: UDP
+            - containerPort: 2152
+              name: gtpu
+              protocol: UDP
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN
+          env:
+            - name: NF_TYPE
+              value: "UPF"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: upf-service
+  namespace: telco-5g-core
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8805
+      name: pfcp
+      protocol: UDP
+    - port: 2152
+      name: gtpu
+      protocol: UDP
+  selector:
+    app: upf

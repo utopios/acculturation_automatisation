@@ -1,0 +1,124 @@
+# ============================================
+# CNF: Session Border Controller (SBC)
+# Cloud Native Security & Interworking
+# ============================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cnf-sbc
+  namespace: telco-cnf
+  labels:
+    app: session-border-controller
+    cnf-type: security
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: session-border-controller
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: session-border-controller
+        cnf-type: security
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9092"
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - session-border-controller
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: sbc
+          image: nginx:alpine
+          ports:
+            - containerPort: 5060
+              name: sip-external
+              protocol: UDP
+            - containerPort: 5080
+              name: sip-internal
+              protocol: UDP
+            - containerPort: 9092
+              name: metrics
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          env:
+            - name: TOPOLOGY_HIDING
+              value: "enabled"
+            - name: NAT_TRAVERSAL
+              value: "enabled"
+            - name: DOS_PROTECTION
+              value: "enabled"
+            - name: MAX_SESSIONS
+              value: "10000"
+          volumeMounts:
+            - name: sbc-config
+              mountPath: /etc/sbc
+              readOnly: true
+      volumes:
+        - name: sbc-config
+          configMap:
+            name: sbc-config
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sbc-config
+  namespace: telco-cnf
+data:
+  sbc.conf: |
+    # SBC Configuration
+    [general]
+    topology_hiding = yes
+    nat_traversal = yes
+
+    [security]
+    dos_protection = yes
+    rate_limit = 1000
+    blacklist_threshold = 100
+
+    [media]
+    rtp_proxy = yes
+    codec_transcoding = yes
+
+    [routing]
+    default_gateway = media-gateway-service
+    sip_proxy = sip-proxy-service
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sbc-service
+  namespace: telco-cnf
+  labels:
+    app: session-border-controller
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 5060
+      targetPort: 5060
+      protocol: UDP
+      name: sip-external
+    - port: 9092
+      targetPort: 9092
+      name: metrics
+  selector:
+    app: session-border-controller

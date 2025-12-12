@@ -1,0 +1,26 @@
+# ============================================
+# Namespace pour les CNF Telco
+# ============================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: telco-cnf
+  labels:
+    app.kubernetes.io/name: telco-cnf
+    environment: demo
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: telco-5g-core
+  labels:
+    app.kubernetes.io/name: telco-5g-core
+    environment: demo
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: telco-monitoring
+  labels:
+    app.kubernetes.io/name: telco-monitoring
+    environment: demo

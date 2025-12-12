@@ -1,0 +1,81 @@
+# ============================================
+# CNF: Media Gateway (RTPEngine simulé)
+# Cloud Native Media Processing
+# ============================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cnf-media-gateway
+  namespace: telco-cnf
+  labels:
+    app: media-gateway
+    cnf-type: media
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: media-gateway
+  template:
+    metadata:
+      labels:
+        app: media-gateway
+        cnf-type: media
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9091"
+    spec:
+      containers:
+        - name: media-gateway
+          image: nginx:alpine
+          ports:
+            - containerPort: 2000
+              name: rtp-start
+              protocol: UDP
+            - containerPort: 9091
+              name: metrics
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          env:
+            - name: RTP_PORT_MIN
+              value: "2000"
+            - name: RTP_PORT_MAX
+              value: "4000"
+            - name: CODEC_SUPPORT
+              value: "G.711,G.729,OPUS"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: media-gateway-service
+  namespace: telco-cnf
+  labels:
+    app: media-gateway
+spec:
+  type: ClusterIP
+  ports:
+    - port: 2000
+      targetPort: 2000
+      protocol: UDP
+      name: rtp
+    - port: 9091
+      targetPort: 9091
+      name: metrics
+  selector:
+    app: media-gateway
+---
+# PodDisruptionBudget pour haute disponibilité
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: media-gateway-pdb
+  namespace: telco-cnf
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: media-gateway

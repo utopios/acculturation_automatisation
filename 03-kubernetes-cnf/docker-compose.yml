@@ -1,0 +1,104 @@
+# ============================================
+# Demo Kubernetes - CNF (Cloud Native Functions)
+# Formation Automatisation Telco
+# ============================================
+#
+# Cette démo utilise K3s (Kubernetes léger) pour
+# démontrer le déploiement de CNF Telco
+#
+# Démarrage: docker-compose up -d
+# Dashboard: http://localhost:8083
+# ============================================
+
+services:
+  # ====== K3s Server (Control Plane) ======
+  k3s-server:
+    image: rancher/k3s:v1.28.4-k3s1
+    container_name: k3s-server
+    command: server --tls-san=k3s-server --tls-san=172.30.0.10
+    tmpfs:
+      - /run
+      - /var/run
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 65535
+        hard: 65535
+    privileged: true
+    environment:
+      - K3S_TOKEN=telco-demo-token
+      - K3S_KUBECONFIG_OUTPUT=/output/kubeconfig.yaml
+      - K3S_KUBECONFIG_MODE=666
+    volumes:
+      - k3s-server:/var/lib/rancher/k3s
+      - ./kubeconfig:/output
+      - ./manifests:/var/lib/rancher/k3s/server/manifests/custom
+    ports:
+      - "6443:6443"  # Kubernetes API
+      - "80:80"      # Ingress HTTP
+      - "443:443"    # Ingress HTTPS
+    networks:
+      k8s-net:
+        ipv4_address: 172.30.0.10
+
+  # ====== K3s Agent (Worker Node) ======
+  k3s-agent:
+    image: rancher/k3s:v1.28.4-k3s1
+    container_name: k3s-agent
+    command: agent
+    tmpfs:
+      - /run
+      - /var/run
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 65535
+        hard: 65535
+    privileged: true
+    environment:
+      - K3S_URL=https://k3s-server:6443
+      - K3S_TOKEN=telco-demo-token
+    volumes:
+      - k3s-agent:/var/lib/rancher/k3s
+    depends_on:
+      - k3s-server
+    networks:
+      k8s-net:
+        ipv4_address: 172.30.0.11
+
+  # ====== Kubectl CLI ======
+  kubectl:
+    image: alpine/k8s:1.28.4
+    container_name: k8s-kubectl
+    entrypoint: ["sleep", "infinity"]
+    volumes:
+      - ./kubeconfig:/root/.kube
+      - ./manifests:/manifests
+    environment:
+      - KUBECONFIG=/root/.kube/kubeconfig.yaml
+    depends_on:
+      - k3s-server
+    networks:
+      - k8s-net
+
+  # ====== Dashboard Web ======
+  k8s-dashboard:
+    image: nginx:alpine
+    container_name: k8s-dashboard
+    volumes:
+      - ./web:/usr/share/nginx/html:ro
+    ports:
+      - "8083:80"
+    networks:
+      - k8s-net
+
+networks:
+  k8s-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+volumes:
+  k3s-server:
+  k3s-agent:

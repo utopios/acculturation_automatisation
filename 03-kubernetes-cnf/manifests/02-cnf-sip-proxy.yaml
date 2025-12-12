@@ -1,0 +1,106 @@
+# ============================================
+# CNF: SIP Proxy (Kamailio simulé)
+# Cloud Native SIP Signaling
+# ============================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cnf-sip-proxy
+  namespace: telco-cnf
+  labels:
+    app: sip-proxy
+    cnf-type: signaling
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: sip-proxy
+  template:
+    metadata:
+      labels:
+        app: sip-proxy
+        cnf-type: signaling
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+    spec:
+      containers:
+        - name: sip-proxy
+          image: nginx:alpine
+          ports:
+            - containerPort: 5060
+              name: sip-udp
+              protocol: UDP
+            - containerPort: 5061
+              name: sip-tcp
+              protocol: TCP
+            - containerPort: 9090
+              name: metrics
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 3
+          env:
+            - name: SIP_DOMAIN
+              value: "telco.local"
+            - name: LOG_LEVEL
+              value: "info"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sip-proxy-service
+  namespace: telco-cnf
+  labels:
+    app: sip-proxy
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5060
+      targetPort: 5060
+      protocol: UDP
+      name: sip-udp
+    - port: 5061
+      targetPort: 5061
+      protocol: TCP
+      name: sip-tcp
+    - port: 9090
+      targetPort: 9090
+      name: metrics
+  selector:
+    app: sip-proxy
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: sip-proxy-hpa
+  namespace: telco-cnf
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cnf-sip-proxy
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
